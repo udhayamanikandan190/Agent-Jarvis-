@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>JARVIS — Voice Assistant</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0B0F14">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0B0F14;
+    --panel:#121821;
+    --bubble-user:#1E2A3A;
+    --bubble-bot:#152029;
+    --accent:#4FD1C5;
+    --accent-dim:#2A5F5A;
+    --text:#E7ECF1;
+    --text-dim:#8A97A6;
+    --danger:#E8615A;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background:radial-gradient(circle at 50% -10%, #16202B 0%, var(--bg) 55%);
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    min-height:100vh;
+  }
+  .shell{
+    width:100%;
+    max-width:640px;
+    display:flex;
+    flex-direction:column;
+    height:100vh;
+    padding:0 16px;
+  }
+  header{
+    padding:22px 4px 14px;
+    display:flex;
+    align-items:center;
+    gap:14px;
+  }
+  .orb{
+    width:44px;height:44px;border-radius:50%;
+    background:conic-gradient(from 180deg, var(--accent), var(--accent-dim), var(--accent));
+    box-shadow:0 0 0 1px rgba(255,255,255,.06), 0 0 22px rgba(79,209,197,.35);
+    flex-shrink:0;
+    transition:box-shadow .3s ease;
+  }
+  .orb.listening{box-shadow:0 0 0 1px rgba(255,255,255,.1), 0 0 30px rgba(79,209,197,.75);}
+  .orb.speaking{box-shadow:0 0 0 1px rgba(255,255,255,.1), 0 0 30px rgba(232,97,90,.6);}
+  .title h1{
+    font-family:'Space Grotesk',sans-serif;
+    font-size:20px;
+    margin:0;
+    letter-spacing:.2px;
+  }
+  .title p{
+    margin:2px 0 0;
+    font-size:13px;
+    color:var(--text-dim);
+  }
+
+  .chat{
+    flex:1;
+    overflow-y:auto;
+    padding:8px 4px 12px;
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    scrollbar-width:thin;
+  }
+  .bubble{
+    max-width:82%;
+    padding:11px 15px;
+    border-radius:14px;
+    font-size:15px;
+    line-height:1.45;
+    white-space:pre-wrap;
+  }
+  .bubble.user{
+    align-self:flex-end;
+    background:var(--bubble-user);
+    border-bottom-right-radius:4px;
+  }
+  .bubble.bot{
+    align-self:flex-start;
+    background:var(--bubble-bot);
+    border:1px solid rgba(79,209,197,.18);
+    border-bottom-left-radius:4px;
+  }
+
+  .chips{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    padding:2px 4px 14px;
+  }
+  .chip{
+    border:1px solid rgba(255,255,255,.12);
+    background:var(--panel);
+    color:var(--text-dim);
+    font-size:12.5px;
+    padding:7px 12px;
+    border-radius:20px;
+    cursor:pointer;
+  }
+  .chip:hover{color:var(--text);border-color:rgba(79,209,197,.4);}
+
+  .dock{
+    padding:12px 4px 20px;
+    display:flex;
+    gap:10px;
+    align-items:center;
+  }
+  .textbox{
+    flex:1;
+    background:var(--panel);
+    border:1px solid rgba(255,255,255,.08);
+    border-radius:24px;
+    padding:12px 16px;
+    color:var(--text);
+    font-size:15px;
+    outline:none;
+  }
+  .textbox::placeholder{color:var(--text-dim);}
+  button.icon-btn{
+    border:none;
+    border-radius:50%;
+    width:46px;height:46px;
+    display:flex;align-items:center;justify-content:center;
+    cursor:pointer;
+    font-size:18px;
+    flex-shrink:0;
+  }
+  #sendBtn{background:var(--accent);color:#04211E;}
+  #micBtn{background:var(--panel);color:var(--accent);border:1px solid rgba(79,209,197,.35);}
+  #micBtn.live{background:var(--accent);color:#04211E;}
+
+  .status{
+    text-align:center;
+    font-size:12px;
+    color:var(--text-dim);
+    padding-bottom:4px;
+  }
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <header>
+    <div class="orb" id="orb"></div>
+    <div class="title">
+      <h1>JARVIS</h1>
+      <p id="statusLine">Tap the mic or type a command</p>
+    </div>
+  </header>
+
+  <div class="chat" id="chat"></div>
+
+  <div class="chips" id="chips">
+    <div class="chip">What can you do?</div>
+    <div class="chip">Tell me a joke</div>
+    <div class="chip">What's the time?</div>
+    <div class="chip">Open YouTube</div>
+    <div class="chip">Flip a coin</div>
+    <div class="chip">Who is Elon Musk?</div>
+  </div>
+
+  <div class="dock">
+    <button class="icon-btn" id="micBtn" title="Voice input">🎙️</button>
+    <input class="textbox" id="textInput" placeholder="Message JARVIS..." autocomplete="off">
+    <button class="icon-btn" id="sendBtn" title="Send">➤</button>
+  </div>
+
+</div>
+
+<script>
+/* ============================================================
+   JARVIS — lightweight browser assistant
+   Command dispatch table: each entry is tested in order,
+   first match wins. Easy to extend — just push a new entry.
+   ============================================================ */
+
+const chatEl   = document.getElementById('chat');
+const orb      = document.getElementById('orb');
+const statusEl = document.getElementById('statusLine');
+const micBtn   = document.getElementById('micBtn');
+const textIn   = document.getElementById('textInput');
+const sendBtn  = document.getElementById('sendBtn');
+const chipsEl  = document.getElementById('chips');
+
+let recognition = null;
+let listening   = false;
+
+/* ---------- chat UI helpers ---------- */
+
+function addBubble(role, text){
+  const div = document.createElement('div');
+  div.className = 'bubble ' + role;
+  div.textContent = text;
+  chatEl.appendChild(div);
+  chatEl.scrollTop = chatEl.scrollHeight;
+}
+
+function speak(text){
+  addBubble('bot', text);
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.rate = 1; u.pitch = 1;
+  orb.classList.add('speaking');
+  statusEl.textContent = 'Speaking...';
+  u.onend = () => {
+    orb.classList.remove('speaking');
+    statusEl.textContent = listening ? 'Listening...' : 'Tap the mic or type a command';
+    if (listening) safeStart();
+  };
+  window.speechSynthesis.speak(u);
+}
+
+function openUrl(url){ window.open(url, '_blank'); }
+function enc(q){ return encodeURIComponent(q.trim()); }
+
+/* ---------- small content banks ---------- */
+
+const JOKES = [
+  "Why do programmers prefer dark mode? Because light attracts bugs.",
+  "I told my computer I needed a break, and it said no problem — it will go to sleep too.",
+  "Why do Java developers wear glasses? Because they don't see sharp.",
+  "There are 10 kinds of people: those who understand binary, and those who don't."
+];
+
+const FACTS = [
+  "Honey never spoils — archaeologists have found 3000-year-old honey that's still edible.",
+  "A day on Venus is longer than a year on Venus.",
+  "Octopuses have three hearts and blue blood.",
+  "The first computer bug was an actual moth found in a relay in 1947."
+];
+
+const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+
+/* ---------- command table ---------- */
+
+const SITES = {
+  youtube:'https://www.youtube.com', google:'https://www.google.com',
+  instagram:'https://www.instagram.com', facebook:'https://www.facebook.com',
+  whatsapp:'https://web.whatsapp.com', gmail:'https://mail.google.com',
+  twitter:'https://x.com', x:'https://x.com', spotify:'https://open.spotify.com',
+  amazon:'https://www.amazon.in', netflix:'https://www.netflix.com',
+  linkedin:'https://www.linkedin.com'
+};
+
+const COMMANDS = [
+
+  { test:t => /\b(hi|hello|hey)\b/.test(t),
+    run:() => speak("Hello! How can I help you today?") },
+
+  { test:t => t.includes('good morning'),
+    run:() => speak("Good morning! Hope you have a great day ahead.") },
+
+  { test:t => t.includes('good afternoon'),
+    run:() => speak("Good afternoon! What can I do for you?") },
+
+  { test:t => t.includes('good evening'),
+    run:() => speak("Good evening! How's your day been?") },
+
+  { test:t => t.includes('good night'),
+    run:() => speak("Good night! Sleep well.") },
+
+  { test:t => t.includes('how are you'),
+    run:() => speak("I'm running smoothly and ready to help.") },
+
+  { test:t => /(who are you|what are you)/.test(t),
+    run:() => speak("I'm JARVIS, a voice assistant that runs right in your browser.") },
+
+  { test:t => t.includes('your name'),
+    run:() => speak("My name is JARVIS.") },
+
+  { test:t => /(who (made|created|built) you)/.test(t),
+    run:() => speak("I was built using HTML, CSS and JavaScript, using the browser's own speech tools.") },
+
+  { test:t => /(what can you do|help me|^help$)/.test(t),
+    run:() => speak("I can open websites, search Google or YouTube, check the maps, tell the time and date, do quick calculations, tell jokes and facts, and answer simple questions. Just ask.") },
+
+  { test:t => t.includes('thank'),
+    run:() => speak("You're welcome!") },
+
+  { test:t => t.includes('i love you'),
+    run:() => speak("That's sweet of you to say!") },
+
+  { test:t => /(compliment me|say something nice)/.test(t),
+    run:() => speak("You're doing great — keep going, you've got this.") },
+
+  { test:t => t.includes('joke'),
+    run:() => speak(pick(JOKES)) },
+
+  { test:t => t.includes('fact'),
+    run:() => speak(pick(FACTS)) },
+
+  { test:t => /(flip a coin|toss a coin)/.test(t),
+    run:() => speak(Math.random() < 0.5 ? "It's heads." : "It's tails.") },
+
+  { test:t => /(roll a dice|roll a die)/.test(t),
+    run:() => speak("You rolled a " + (Math.floor(Math.random()*6)+1) + ".") },
+
+  { test:t => /(stop|mute)( listening)?/.test(t) && listening,
+    run:() => { stopListening(); speak("Okay, I've stopped listening."); } },
+
+  { test:t => /(clear|reset) (the )?(chat|screen)/.test(t),
+    run:() => { chatEl.innerHTML=''; speak("Cleared."); } },
+
+  // open a website by name: "open youtube", "go to spotify"
+  { test:t => /(open|go to) (\w+)/.test(t),
+    run:t => {
+      const m = t.match(/(?:open|go to) (\w+)/);
+      const site = m && SITES[m[1]];
+      if (site){ speak(`Opening ${m[1]} for you.`); openUrl(site); }
+      else { speak(`I don't have a shortcut for that site, searching Google instead.`); openUrl('https://www.google.com/search?q=' + enc(t)); }
+    } },
+
+  { test:t => /(search youtube|youtube search) (for )?(.+)/.test(t),
+    run:t => {
+      const q = t.replace(/(search youtube|youtube search)( for)?/,'').trim();
+      speak(`Searching YouTube for ${q}.`);
+      openUrl('https://www.youtube.com/results?search_query=' + enc(q));
+    } },
+
+  { test:t => /(find|search) (.+) in maps/.test(t),
+    run:t => {
+      const place = t.replace(/(find|search)/,'').replace('in maps','').trim();
+      speak(`Showing ${place} on the map.`);
+      openUrl('https://www.google.com/maps/search/' + enc(place));
+    } },
+
+  { test:t => t.includes('weather in'),
+    run:t => {
+      const place = t.split('weather in')[1].trim();
+      speak(`Checking the weather in ${place}.`);
+      openUrl('https://www.google.com/search?q=weather+' + enc(place));
+    } },
+
+  { test:t => /(define|meaning of) (.+)/.test(t),
+    run:t => {
+      const word = t.replace(/(define|meaning of)/,'').trim();
+      speak(`Here's the meaning of ${word}.`);
+      openUrl('https://www.google.com/search?q=define+' + enc(word));
+    } },
+
+  { test:t => /^(who|what) (is|was|are) (.+)/.test(t),
+    run:t => {
+      const q = t.replace(/^(who|what) (is|was|are)/, '').trim();
+      speak(`Let me look up ${q} for you.`);
+      openUrl('https://en.wikipedia.org/wiki/Special:Search?search=' + enc(q));
+    } },
+
+  { test:t => t.includes('calculate') || /^[\d\s+\-*/().]+$/.test(t),
+    run:t => {
+      let expr = t.replace('calculate','')
+                  .replace(/plus/g,'+').replace(/minus/g,'-')
+                  .replace(/times|multiplied by/g,'*').replace(/divided by/g,'/');
+      const safe = /^[\d\s+\-*/().]+$/.test(expr);
+      try{
+        if(!safe) throw new Error('unsafe');
+        speak(`The answer is ${Function('"use strict";return (' + expr + ')')()}.`);
+      }catch(e){ speak("Sorry, I couldn't calculate that."); }
+    } },
+
+  { test:t => /(what('| i)?s the time|current time|^time$)/.test(t),
+    run:() => speak('The current time is ' + new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}) + '.') },
+
+  { test:t => /(today'?s date|what date is it)/.test(t),
+    run:() => speak('Today is ' + new Date().toLocaleDateString('en-IN',{weekday:'long',year:'numeric',month:'long',day:'numeric'}) + '.') },
+
+  // generic search fallback — mimics a real assistant instead of "I don't understand"
+  { test:t => t.startsWith('search '),
+    run:t => { const q=t.slice(7).trim(); speak(`Searching for ${q}.`); openUrl('https://www.google.com/search?q='+enc(q)); } },
+
+  { test:() => true,
+    run:t => { speak("I'm not fully sure about that — let me search it for you."); openUrl('https://www.google.com/search?q='+enc(t)); } }
+];
+
+function processCommand(raw){
+  const text = raw.toLowerCase().trim();
+  if (!text) return;
+  addBubble('user', raw);
+  for (const cmd of COMMANDS){
+    if (cmd.test(text)){ cmd.run(text); return; }
+  }
+}
+
+/* ---------- text input ---------- */
+
+sendBtn.addEventListener('click', () => {
+  const val = textIn.value;
+  textIn.value = '';
+  if (val.trim()) processCommand(val);
+});
+textIn.addEventListener('keydown', e => { if (e.key === 'Enter') sendBtn.click(); });
+
+chipsEl.addEventListener('click', e => {
+  if (e.target.classList.contains('chip')) processCommand(e.target.textContent);
+});
+
+/* ---------- voice input ---------- */
+
+function setupRecognition(){
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR){ statusEl.textContent = 'Voice input not supported in this browser'; return null; }
+  const r = new SR();
+  r.lang = 'en-IN';
+  r.continuous = false;
+  r.interimResults = false;
+
+  r.onresult = e => processCommand(e.results[0][0].transcript);
+  r.onerror = () => { if (listening) setTimeout(safeStart, 800); };
+  r.onend   = () => { if (listening) setTimeout(safeStart, 400); };
+  return r;
+}
+
+function safeStart(){
+  if (!listening || window.speechSynthesis.speaking) return;
+  try{ recognition.start(); orb.classList.add('listening'); statusEl.textContent = 'Listening...'; }
+  catch(e){ /* already started */ }
+}
+
+function stopListening(){
+  listening = false;
+  orb.classList.remove('listening');
+  micBtn.classList.remove('live');
+  statusEl.textContent = 'Tap the mic or type a command';
+  if (recognition) recognition.stop();
+}
+
+micBtn.addEventListener('click', () => {
+  if (!recognition) recognition = setupRecognition();
+  if (!recognition) return;
+
+  if (listening){ stopListening(); }
+  else{
+    listening = true;
+    micBtn.classList.add('live');
+    safeStart();
+  }
+});
+
+/* ---------- boot ---------- */
+
+speak("I'm ready. Tap the mic or type a command to get started.");
+
+/* ---------- PWA: register service worker (enables install + offline shell) ---------- */
+if ('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
+</script>
+
+</body>
+</html>
+
